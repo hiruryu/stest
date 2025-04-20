@@ -1,11 +1,11 @@
 function parseRatio(ratioStr) {
   const [num, denom] = ratioStr.split('/').map(Number);
-  return denom ? num / denom : num;
+  return denom ? num/denom : num;
 }
 
 function parseDuration(durStr) {
   const [num, denom] = durStr.split('/').map(Number);
-  return denom ? num / denom : num;
+  return denom ? num/denom : num;
 }
 
 function getRatioArray(raw) {
@@ -17,117 +17,81 @@ function getRatioArray(raw) {
 
 function playScaleRatios(ratios) {
   if (!ratios.length) return;
-  const AudioCtx = window.AudioContext || window.webkitAudioContext;
-  const ctx = new AudioCtx();
-  const baseFreq = parseFloat(document.getElementById('baseFreqInput').value) || 440;
-  let t0 = ctx.currentTime;
+  const ctx = new (window.AudioContext||window.webkitAudioContext)();
+  const base = parseFloat(document.getElementById('baseFreqInput').value)||440;
+  let t = ctx.currentTime;
 
-  ratios.forEach((r, i) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+  ratios.forEach((r,i) => {
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.value = baseFreq * r;
+    osc.frequency.value = base * r;
     gain.gain.value = 0.4;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    const startTime = t0 + i * 0.3;
-    osc.start(startTime);
-    osc.stop(startTime + 0.3);
+    osc.connect(gain); gain.connect(ctx.destination);
+    const start = t + i*0.3;
+    osc.start(start);
+    osc.stop(start + 0.3);
   });
 }
 
-function expandRhythmInput(raw) {
-  const result = [];
 
-  function helper(str) {
-    const tokens = [];
-    let buffer = '';
-    let depth = 0;
-
-    for (let i = 0; i < str.length; i++) {
-      const char = str[i];
-      if (char === '[') {
-        if (depth > 0) buffer += char;
-        depth++;
-      } else if (char === ']') {
-        depth--;
-        if (depth === 0) {
-          tokens.push('[' + buffer + ']');
-          buffer = '';
-        } else {
-          buffer += char;
-        }
-      } else if ((char === ',' || char === 'x') && depth === 0) {
-        if (buffer.trim()) tokens.push(buffer.trim());
-        buffer = '';
-        if (char === 'x') {
-          let j = i + 1;
-          while (j < str.length && /\d/.test(str[j])) buffer += str[j++];
-          tokens.push('x' + buffer);
-          buffer = '';
-          i = j - 1;
-        }
-      } else {
-        buffer += char;
-      }
-    }
-    if (buffer.trim()) tokens.push(buffer.trim());
-
-    let i = 0;
-    while (i < tokens.length) {
-      const token = tokens[i];
-      if (/^\[.*\]$/.test(token)) {
-        const inner = token.slice(1, -1);
-        let repeat = 1;
-        if (tokens[i + 1] && /^x\d+$/.test(tokens[i + 1])) {
-          repeat = parseInt(tokens[i + 1].slice(1), 10);
-          i++;
-        }
-        const sub = helper(inner);
-        for (let j = 0; j < repeat; j++) result.push(...sub);
-      } else if (/^\(.*\)$/.test(token)) {
-        const inner = token.slice(1, -1).trim();
-        const vals = helper(inner);
-        vals.forEach(_ => result.push(null));
-      } else if (token === '=') {
-        if (result.length > 0) {
-          result.push(result[result.length - 1]);
-        }
-      } else if (/^\d+(\/\d+)?$/.test(token)) {
-        const dur = parseDuration(token);
-        result.push(dur);
-      }
-      i++;
-    }
-
-    return result;
-  }
-
-  return helper(raw);
+function tokenize(str) {
+  const re = /\[.*?\]x\d+|\(.*?\)|=|\d+(?:\/\d+)?/g;
+  return str.match(re) || [];
 }
 
-function playRhythmBeats(durations) {
-  if (!durations.length) return;
-  const AudioCtx = window.AudioContext || window.webkitAudioContext;
-  const ctx = new AudioCtx();
-  const beatMs = parseFloat(document.getElementById('beatDurationInput').value) || 500;
-  const beatSec = beatMs / 1000;
-  let t0 = ctx.currentTime;
+function expandRhythmInput(raw) {
+  const tokens = tokenize(raw);
+  const result = [];
+  let lastDur = null;
 
-  durations.forEach(d => {
-    const dur = d === null ? 0 : d;
-    if (d !== null) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+  tokens.forEach(tok => {
+    let m;
+    if (m = tok.match(/^\[(.*)\]x(\d+)$/)) {
+      const [_, grp, cnt] = m;
+      const sub = expandRhythmInput(grp);
+      for (let i=0;i<+cnt;i++) result.push(...sub);
+      return;
+    }
+    if (m = tok.match(/^\((.*)\)$/)) {
+      const inner = m[1].trim();
+      const sub = expandRhythmInput(inner);
+      sub.forEach(o => result.push({ value: o.value, isRest: true }));
+      lastDur = sub[sub.length-1]?.value ?? lastDur;
+      return;
+    }
+    if (tok === '=') {
+      if (lastDur != null) result.push({ value: lastDur, isRest: false });
+      return;
+    }
+    if (/^\d+(?:\/\d+)?$/.test(tok)) {
+      const dur = parseDuration(tok);
+      result.push({ value: dur, isRest: false });
+      lastDur = dur;
+      return;
+    }
+  });
+
+  return result;
+}
+
+function playRhythmBeats(sequence) {
+  if (!sequence.length) return;
+  const ctx = new (window.AudioContext||window.webkitAudioContext)();
+  const beatMs = parseFloat(document.getElementById('beatDurationInput').value)||500;
+  const beatSec = beatMs/1000;
+  let t = ctx.currentTime;
+
+  sequence.forEach(({ value, isRest }) => {
+    if (!isRest) {
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
       osc.type = 'square';
       osc.frequency.value = 1000;
       gain.gain.value = 0.4;
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(t0);
-      osc.stop(t0 + 0.03);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.03);
     }
-    t0 += dur * beatSec;
+    t += value * beatSec;
   });
 }
 
@@ -137,82 +101,75 @@ function expandPolyrhythm(raw) {
 
 function playPolyrhythm(raw) {
   const tracks = expandPolyrhythm(raw);
-  const AudioCtx = window.AudioContext || window.webkitAudioContext;
-  const ctx = new AudioCtx();
-  const beatMs = parseFloat(document.getElementById('beatDurationInput').value) || 500;
-  const beatSec = beatMs / 1000;
+  const ctx = new (window.AudioContext||window.webkitAudioContext)();
+  const beatMs = parseFloat(document.getElementById('beatDurationInput').value)||500;
+  const beatSec = beatMs/1000;
 
-  const lengths = tracks.map(arr => arr.reduce((sum, v) => sum + (v||0), 0));
+  const lengths = tracks.map(seq => seq.reduce((s,o)=>
+    s + (o.value||0), 0));
   const maxLen = Math.max(...lengths);
 
-  tracks.forEach((durs, ti) => {
-    let t0 = ctx.currentTime;
-    let total = durs.reduce((s, v) => s + (v||0), 0);
+  tracks.forEach((seq, ti) => {
+    let t = ctx.currentTime;
+    let total = seq.reduce((s,o)=>s + (o.value||0),0);
+
     if (total < maxLen) {
-      durs = durs.concat(Array(Math.ceil((maxLen - total) / (durs[durs.length-1]||1))).fill(null));
+      seq.push({ value: maxLen - total, isRest: true });
     }
-    durs.forEach(d => {
-      if (d != null) {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = ['square','sine','triangle','sawtooth'][ti % 4];
-        osc.frequency.value = 800 + ti * 400;
+    seq.forEach(({ value, isRest }) => {
+      if (!isRest) {
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.type = ['square','sine','triangle','sawtooth'][ti%4];
+        osc.frequency.value = 800 + 400*ti;
         gain.gain.value = 0.4;
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(t0);
-        osc.stop(t0 + 0.03);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.03);
       }
-      t0 += (d || 0) * beatSec;
+      t += value * beatSec;
     });
   });
 }
 
-document.getElementById('playResearch').addEventListener('click', () => {
+document.getElementById('playResearch').addEventListener('click', ()=>{
   const raw = document.getElementById('ratioInput').value;
-  const ratios = getRatioArray(raw);
-  const status = document.getElementById('status');
-  if (!ratios.length) {
-    status.textContent = '有効な比率が見つかりません。';
-    return;
+  const arr = getRatioArray(raw);
+  const st = document.getElementById('status');
+  if (!arr.length) {
+    st.textContent = '有効な比率がありません。'; return;
   }
-  status.textContent = `再生中: ${ratios.map(r => r.toFixed(3)).join(' , ')}`;
-  playScaleRatios(ratios);
+  st.textContent = `再生中: ${arr.map(r=>r.toFixed(3)).join(' , ')}`;
+  playScaleRatios(arr);
 });
 
-document.getElementById('playRhythm').addEventListener('click', () => {
+document.getElementById('playRhythm').addEventListener('click', ()=>{
   const raw = document.getElementById('rhythmInput').value;
-  const durations = expandRhythmInput(raw);
-  const status = document.getElementById('rhythmStatus');
-  if (!durations.length) {
-    status.textContent = '有効な拍数が見つかりません。';
-    return;
+  const seq = expandRhythmInput(raw);
+  const st = document.getElementById('rhythmStatus');
+  if (!seq.length) {
+    st.textContent = '有効な拍数がありません。'; return;
   }
-  const disp = durations.map(d => d === null ? `(rest)` : d).join(' , ');
-  status.textContent = `再生中ビート: ${disp} 拍`;
-  playRhythmBeats(durations);
+  st.textContent = `再生中ビート: ${seq.map(o=>
+    o.isRest?`(rest ${o.value})`:o.value
+  ).join(' , ')} 拍`;
+  playRhythmBeats(seq);
 });
 
-document.querySelectorAll('.usage-toggle').forEach(button => {
-  button.addEventListener('click', () => {
-    const targetId = button.getAttribute('data-target');
-    const targetElement = document.getElementById(targetId);
-    if (targetElement) {
-      targetElement.classList.toggle('visible');
-      targetElement.style.display = targetElement.classList.contains('visible') ? 'block' : 'none';
-    }
-  });
-});
-
-document.getElementById('playPolyrhythm')?.addEventListener('click', () => {
+document.getElementById('playPolyrhythm').addEventListener('click', ()=>{
   const raw = document.getElementById('polyrhythmInput').value;
-  const status = document.getElementById('polyrhythmStatus');
-  const patterns = expandPolyrhythm(raw);
-  if (!patterns.length) {
-    status.textContent = 'ポリリズムの入力が無効です。';
-    return;
+  const st = document.getElementById('polyrhythmStatus');
+  const tracks = expandPolyrhythm(raw);
+  if (!tracks.length) {
+    st.textContent = 'ポリリズム入力が無効です。'; return;
   }
-  status.textContent = '再生中ポリリズム...';
+  st.textContent = 'ポリリズム再生中…';
   playPolyrhythm(raw);
 });
 
+document.querySelectorAll('.usage-toggle').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const id = b.dataset.target;
+    const el = document.getElementById(id);
+    el.style.display = el.style.display==='none'?'block':'none';
+  });
+});
