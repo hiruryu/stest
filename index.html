@@ -4,17 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>🔬 スケール＆リズム研究用</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 2rem; background: #fafafa; }
-    .container { max-width: 600px; margin: 0 auto; }
-    label { display: block; margin-bottom: 0.5rem; }
-    input, textarea, button { width: 100%; padding: 0.5rem; margin-bottom: 1rem; box-sizing: border-box; }
-    button { background: #007acc; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-    button:hover { background: #005fa3; }
-    .placeholder { color: #888; font-size: 0.9rem; }
-    hr { margin: 2rem 0; }
-    .usage { background: #eee; padding: 1rem; margin-bottom: 1rem; display: none; border-radius: 4px; }
-  </style>
+  <link rel="stylesheet" href="stylesheet.css">
 </head>
 <body>
   <div class="container">
@@ -32,7 +22,7 @@
     <hr>
 
     <h2>リズム <button class="usage-toggle" data-target="rhythmUsage">使い方</button></h2>
-    <div id="rhythmUsage" style="display: none;">
+    <div id="rhythmUsage" class="usage">
       <p class="line">リズム入力の構文例：</p>
       <ul>
         <li>「 = 」直前の拍価と同価</li>
@@ -46,8 +36,19 @@
     <input type="number" id="beatDurationInput" value="500">
     <button id="playRhythm">再生</button>
     <p id="rhythmStatus" class="placeholder">入力後に「 再生 」ボタンを押してください。</p>
-  </div>
 
+    <hr>
+    <h2>ポリリズム</h2>
+    <p>複数のリズムをセミコロンで区切って入力してください。</p>
+    <textarea id="polyrhythmInput" rows="2" placeholder="1,1,1 ; 2/3,2/3,2/3"></textarea>
+    <button id="playPolyrhythm">再生</button>
+    <p id="polyrhythmStatus" class="placeholder">入力後に「 再生 」ボタンを押してください。</p>
+  </div>
   <script src="main.js"></script>
+  <br>
+  <br>
+  <div class="x">
+    <a href="https://www.youtube.com/@Hiruryu01">@Hiruryu01</a>
+  </div>
 </body>
 </html>
