@@ -12,3 +12,7 @@ body { font-family: Arial, sans-serif; padding: 2rem; background: #fafafa; }
     }
     .placeholder { color: #888; font-size: 0.9rem; }
     hr { margin: 2rem 0; }
+.line {
+    .line 
+    border-bottom: solid 4px #ffe45f;
+}
