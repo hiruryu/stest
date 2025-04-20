@@ -37,31 +37,73 @@ function playScaleRatios(ratios) {
 }
 
 function expandRhythmInput(raw) {
-  const tokens = raw.match(/\[.*?\]x\d+|\(.*?\)|=|\d+(?:\/\d+)?/g) || [];
   const result = [];
-  let lastValue = null;
 
-  tokens.forEach(token => {
-    if (/^\[.*\]x\d+$/.test(token)) {
-      const [, group, count] = token.match(/^\[(.*)\]x(\d+)$/);
-      const sub = expandRhythmInput(group);
-      for (let i = 0; i < parseInt(count, 10); i++) {
-        result.push(...sub);
+  function helper(str) {
+    const tokens = [];
+    let buffer = '';
+    let depth = 0;
+
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      if (char === '[') {
+        if (depth > 0) buffer += char;
+        depth++;
+      } else if (char === ']') {
+        depth--;
+        if (depth === 0) {
+          tokens.push('[' + buffer + ']');
+          buffer = '';
+        } else {
+          buffer += char;
+        }
+      } else if ((char === ',' || char === 'x') && depth === 0) {
+        if (buffer.trim()) tokens.push(buffer.trim());
+        buffer = '';
+        if (char === 'x') {
+          let j = i + 1;
+          while (j < str.length && /\d/.test(str[j])) buffer += str[j++];
+          tokens.push('x' + buffer);
+          buffer = '';
+          i = j - 1;
+        }
+      } else {
+        buffer += char;
       }
-    } else if (/^\(.*\)$/.test(token)) {
-      const inner = token.slice(1, -1).trim();
-      const vals = expandRhythmInput(inner);
-      vals.forEach(v => result.push(null));
-    } else if (token === '=') {
-      if (lastValue !== null) result.push(lastValue);
-    } else {
-      const dur = parseDuration(token);
-      result.push(dur);
-      lastValue = dur;
     }
-  });
+    if (buffer.trim()) tokens.push(buffer.trim());
 
-  return result;
+    let i = 0;
+    while (i < tokens.length) {
+      const token = tokens[i];
+      if (/^\[.*\]$/.test(token)) {
+        const inner = token.slice(1, -1);
+        let repeat = 1;
+        if (tokens[i + 1] && /^x\d+$/.test(tokens[i + 1])) {
+          repeat = parseInt(tokens[i + 1].slice(1), 10);
+          i++;
+        }
+        const sub = helper(inner);
+        for (let j = 0; j < repeat; j++) result.push(...sub);
+      } else if (/^\(.*\)$/.test(token)) {
+        const inner = token.slice(1, -1).trim();
+        const vals = helper(inner);
+        vals.forEach(_ => result.push(null));
+      } else if (token === '=') {
+        if (result.length > 0) {
+          result.push(result[result.length - 1]);
+        }
+      } else if (/^\d+(\/\d+)?$/.test(token)) {
+        const dur = parseDuration(token);
+        result.push(dur);
+      }
+      i++;
+    }
+
+    return result;
+  }
+
+  return helper(raw);
 }
 
 function playRhythmBeats(durations) {
@@ -157,11 +199,20 @@ document.querySelectorAll('.usage-toggle').forEach(button => {
     const targetElement = document.getElementById(targetId);
     if (targetElement) {
       targetElement.classList.toggle('visible');
+      targetElement.style.display = targetElement.classList.contains('visible') ? 'block' : 'none';
     }
   });
 });
 
 document.getElementById('playPolyrhythm')?.addEventListener('click', () => {
   const raw = document.getElementById('polyrhythmInput').value;
+  const status = document.getElementById('polyrhythmStatus');
+  const patterns = expandPolyrhythm(raw);
+  if (!patterns.length) {
+    status.textContent = 'ポリリズムの入力が無効です。';
+    return;
+  }
+  status.textContent = '再生中ポリリズム...';
   playPolyrhythm(raw);
 });
+
