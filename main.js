@@ -197,4 +197,67 @@ document.querySelectorAll('.usage-toggle').forEach(b => {
     const el = document.getElementById(id);
     el.style.display = el.style.display === 'none' ? 'block' : 'none';
   });
+  function parseChordProgression(raw) {
+  const tokens = raw.trim().split(/\s+/);
+  const base = parseFloat(document.getElementById('baseFreqInput').value) || 440;
+  let currentRoot = base;
+  const progression = [];
+
+  tokens.forEach(tok => {
+    let m;
+    if (tok === '!') {
+      currentRoot = base;
+      return;
+    }
+    if (m = tok.match(/^(↑|↓)(\d+(?:\/\d+)?)\[(.+)\]$/)) {
+      const dir = m[1] === '↑' ? 1 : -1;
+      const ratio = parseRatio(m[2]);
+      currentRoot = dir === 1 ? currentRoot * ratio : currentRoot / ratio;
+      const intervals = getRatioArray(m[3]);
+      progression.push({ root: currentRoot, intervals });
+      return;
+    }
+    if (m = tok.match(/^\[(.+)\]$/)) {
+      const intervals = getRatioArray(m[1]);
+      progression.push({ root: currentRoot, intervals });
+      return;
+    }
+  });
+
+  return progression;
+}
+
+function playChordProgression(chords) {
+  if (!chords.length) return;
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const duration = parseFloat(document.getElementById('chordDurationInput').value) || 1;
+  let t0 = ctx.currentTime;
+
+  chords.forEach(({ root, intervals }) => {
+    intervals.forEach(r => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = root * r;
+      gain.gain.value = 0.3;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + duration);
+    });
+    t0 += duration;
+  });
+}
+
+document.getElementById('playChords').addEventListener('click', () => {
+  const raw = document.getElementById('chordInput').value;
+  const st = document.getElementById('chordStatus');
+  const chords = parseChordProgression(raw);
+  if (!chords.length) {
+    st.textContent = '有効なコード進行がありません';
+    return;
+  }
+  st.textContent = `コード進行再生中 (${chords.length} 和音)`;
+  playChordProgression(chords);
+});
 });
