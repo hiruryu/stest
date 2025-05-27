@@ -20,21 +20,12 @@
     <p id="status" class="placeholder">入力後に「 再生 」ボタンを押してください。</p>
     
     <hr>
-    <h2>コード進行 <button class="usage-toggle" data-target="chordUsage">使い方</button></h2>
-    <div id="chordUsage" class="usage">
-      <ul>
-        <li><code>!</code> は主音（Base）をルートに設定</li>
-        <li><code>↑ratio</code>、<code>↓ratio</code>：現在のルートを ratio 倍／逆 ratio 倍</li>
-        <li><code>[a,b,c]</code>：コード構成音（ratio の配列）</li>
-        <li>Each tokenはスペース区切り</li>
-      </ul>
-    </div>
-    <textarea id="chordInput" rows="2" placeholder="例: ! [1,5/4,3/2] ↑3/2 [1,5/4,3/2]"></textarea>
-    <label for="chordDurationInput">各コードの長さ (秒)</label>
-    <input type="number" id="chordDurationInput" value="1" step="0.1">
-    <button class="playChords" id="playChords">再生</button>
-    <p id="chordStatus" class="placeholder">入力後に「 再生 」ボタンを押してください。</p>
-  </div>
+   <hr>
+<h2>コード進行</h2>
+<p>例：<code>![1, 5/4, 3/2] - ↑3/2[1, 5/4, 3/2] - ↓3/2[1, 6/5, 9/5]</code></p>
+<textarea id="chordProgressionInput" rows="2"></textarea>
+<button class="playChordProgression" id="playChordProgression">再生</button>
+<p id="chordStatus" class="placeholder">入力後に「 再生 」ボタンを押してください。</p>
 
     <hr>
     <h2>リズム <button class="usage-toggle" data-target="rhythmUsage">使い方</button></h2>
