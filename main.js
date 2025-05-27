@@ -11,107 +11,70 @@ function parseDuration(durStr) {
 function getRatioArray(raw) {
   return raw.split(',')
     .map(s => s.trim())
-    .filter(s => /^\d+(?:\/\d+)?$/.test(s))
+    .filter(s => /^\d+(\/\d+)?$/.test(s))
     .map(parseRatio);
 }
 
 function playScaleRatios(ratios) {
   if (!ratios.length) return;
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const base = parseFloat(document.getElementById('baseFreqInput').value) || 440;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new AudioCtx();
+  const baseFreq = parseFloat(document.getElementById('baseFreqInput').value) || 440;
   let t0 = ctx.currentTime;
 
   ratios.forEach((r, i) => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.value = base * r;
+    osc.frequency.value = baseFreq * r;
     gain.gain.value = 0.4;
     osc.connect(gain);
     gain.connect(ctx.destination);
-    const start = t0 + i * 0.3;
-    osc.start(start);
-    osc.stop(start + 0.3);
+    const startTime = t0 + i * 0.3;
+    osc.start(startTime);
+    osc.stop(startTime + 0.3);
   });
-}
-
-function tokenize(str) {
-  const tokens = [];
-  let buf = '';
-  let depth = 0;
-  for (let i = 0; i < str.length; i++) {
-    const c = str[i];
-    if ((c === '[' || c === '(') && depth === 0) {
-      if (buf.trim()) { tokens.push(buf.trim()); buf = ''; }
-      buf += c; depth = 1;
-    } else if (depth > 0) {
-      buf += c;
-      if (c === '[' || c === '(') depth++;
-      if (c === ']' || c === ')') depth--;
-      if (depth === 0) {
-        let j = i + 1, rep = '';
-        while (j < str.length && (/^[x0-9]$/.test(str[j]))) { rep += str[j++]; }
-        if (/^x\d+$/.test(rep)) { buf += rep; i = j - 1; }
-        tokens.push(buf.trim()); buf = '';
-      }
-    } else if (c === ',') {
-      if (buf.trim()) { tokens.push(buf.trim()); buf = ''; }
-    } else {
-      buf += c;
-    }
-  }
-  if (buf.trim()) tokens.push(buf.trim());
-  return tokens;
 }
 
 function expandRhythmInput(raw) {
-  const tokens = tokenize(raw);
-  const seq = [];
-  let last = null;
+  const tokens = raw.match(/\[.*?\]x\d+|\(.*?\)|=|\d+(?:\/\d+)?/g) || [];
+  const result = [];
+  let lastValue = null;
 
-  tokens.forEach(tok => {
-    let m;
-    if (m = tok.match(/^\[(.*)\]x(\d+)$/)) {
-      const group = m[1];
-      const count = parseInt(m[2], 10);
+  tokens.forEach(token => {
+    if (/^\[.*\]x\d+$/.test(token)) {
+      const [, group, count] = token.match(/^\[(.*)\]x(\d+)$/);
       const sub = expandRhythmInput(group);
-      for (let k = 0; k < count; k++) seq.push(...sub);
-      return;
+      for (let i = 0; i < parseInt(count, 10); i++) {
+        result.push(...sub);
+      }
+    } else if (/^\(.*\)$/.test(token)) {
+      const inner = token.slice(1, -1).trim();
+      const vals = expandRhythmInput(inner);
+      vals.forEach(v => result.push(null));
+    } else if (token === '=') {
+      if (lastValue !== null) result.push(lastValue);
+    } else {
+      const dur = parseDuration(token);
+      result.push(dur);
+      lastValue = dur;
     }
-    if (m = tok.match(/^\((.*)\)$/)) {
-      const inner = m[1].trim();
-      const sub = expandRhythmInput(inner);
-      const total = sub.reduce((sum, o) => sum + o.value, 0);
-      seq.push({ value: total, isRest: true });
-      last = total;
-      return;
-    }
-    if (tok === '=') {
-      if (last != null) seq.push({ value: last, isRest: false });
-      return;
-    }
-    if (/^\d+(?:\/\d+)?$/.test(tok)) {
-      const val = parseDuration(tok);
-      seq.push({ value: val, isRest: false });
-      last = val;
-      return;
-    }
-    // その他無視
   });
 
-  return seq;
+  return result;
 }
 
-function playRhythmBeats(sequence) {
-  if (!sequence.length) return;
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+function playRhythmBeats(durations) {
+  if (!durations.length) return;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new AudioCtx();
   const beatMs = parseFloat(document.getElementById('beatDurationInput').value) || 500;
   const beatSec = beatMs / 1000;
   let t0 = ctx.currentTime;
 
-  sequence.forEach(item => {
-    const { value, isRest } = item;
-    if (!isRest) {
+  durations.forEach(d => {
+    const dur = d === null ? 0 : d;
+    if (d !== null) {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'square';
@@ -122,32 +85,32 @@ function playRhythmBeats(sequence) {
       osc.start(t0);
       osc.stop(t0 + 0.03);
     }
-    t0 += value * beatSec;
+    t0 += dur * beatSec;
   });
 }
 
-// --- ポリリズム ---
 function expandPolyrhythm(raw) {
-  return raw.split(';').map(s => expandRhythmInput(s.trim()));
+  return raw.split(';').map(track => expandRhythmInput(track.trim()));
 }
 
 function playPolyrhythm(raw) {
   const tracks = expandPolyrhythm(raw);
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new AudioCtx();
   const beatMs = parseFloat(document.getElementById('beatDurationInput').value) || 500;
   const beatSec = beatMs / 1000;
 
-  // 小節長を揃える
-  const lengths = tracks.map(seq => seq.reduce((sum, o) => sum + o.value, 0));
+  const lengths = tracks.map(arr => arr.reduce((sum, v) => sum + (v||0), 0));
   const maxLen = Math.max(...lengths);
 
-  tracks.forEach((seq, ti) => {
+  tracks.forEach((durs, ti) => {
     let t0 = ctx.currentTime;
-    let total = seq.reduce((sum, o) => sum + o.value, 0);
-    if (total < maxLen) seq.push({ value: maxLen - total, isRest: true });
-
-    seq.forEach(({ value, isRest }) => {
-      if (!isRest) {
+    let total = durs.reduce((s, v) => s + (v||0), 0);
+    if (total < maxLen) {
+      durs = durs.concat(Array(Math.ceil((maxLen - total) / (durs[durs.length-1]||1))).fill(null));
+    }
+    durs.forEach(d => {
+      if (d != null) {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = ['square','sine','triangle','sawtooth'][ti % 4];
@@ -158,102 +121,113 @@ function playPolyrhythm(raw) {
         osc.start(t0);
         osc.stop(t0 + 0.03);
       }
-      t0 += value * beatSec;
+      t0 += (d || 0) * beatSec;
     });
   });
 }
 
 document.getElementById('playResearch').addEventListener('click', () => {
   const raw = document.getElementById('ratioInput').value;
-  const arr = getRatioArray(raw);
-  const st = document.getElementById('status');
-  if (!arr.length) { st.textContent = '有効な比率がありません'; return; }
-  st.textContent = `再生中: ${arr.map(r => r.toFixed(3)).join(' , ')}`;
-  playScaleRatios(arr);
+  const ratios = getRatioArray(raw);
+  const status = document.getElementById('status');
+  if (!ratios.length) {
+    status.textContent = '有効な比率が見つかりません。';
+    return;
+  }
+  status.textContent = `再生中: ${ratios.map(r => r.toFixed(3)).join(' , ')}`;
+  playScaleRatios(ratios);
 });
 
 document.getElementById('playRhythm').addEventListener('click', () => {
   const raw = document.getElementById('rhythmInput').value;
-  const seq = expandRhythmInput(raw);
-  const st = document.getElementById('rhythmStatus');
-  if (!seq.length) { st.textContent = '有効な拍数がありません'; return; }
-  st.textContent = `再生中ビート: ${seq.map(o => o.isRest ? `(rest ${o.value})` : o.value).join(' , ')} 拍`;
-  playRhythmBeats(seq);
+  const durations = expandRhythmInput(raw);
+  const status = document.getElementById('rhythmStatus');
+  if (!durations.length) {
+    status.textContent = '有効な拍数が見つかりません。';
+    return;
+  }
+  const disp = durations.map(d => d === null ? `(rest)` : d).join(' , ');
+  status.textContent = `再生中ビート: ${disp} 拍`;
+  playRhythmBeats(durations);
 });
 
-document.getElementById('playPolyrhythm').addEventListener('click', () => {
+document.querySelectorAll('.usage-toggle').forEach(button => {
+  button.addEventListener('click', () => {
+    const targetId = button.getAttribute('data-target');
+    const targetElement = document.getElementById(targetId);
+    if (targetElement) {
+      targetElement.classList.toggle('visible');
+    }
+  });
+});
+
+document.getElementById('playPolyrhythm')?.addEventListener('click', () => {
   const raw = document.getElementById('polyrhythmInput').value;
-  const st = document.getElementById('polyrhythmStatus');
-  const tracks = expandPolyrhythm(raw);
-  if (!tracks.length) { st.textContent = 'ポリリズム入力が無効です'; return; }
-  st.textContent = 'ポリリズム再生中…';
   playPolyrhythm(raw);
 });
 
-document.querySelectorAll('.usage-toggle').forEach(b => {
-  b.addEventListener('click', () => {
-    const id = b.dataset.target;
-    const el = document.getElementById(id);
-    el.style.display = el.style.display === 'none' ? 'block' : 'none';
-  });
-  
- function parseChordProgression(raw) {
-    const tokens = raw.split('-').map(s => s.trim());
-    const base = parseFloat(document.getElementById('baseFreqInput').value) || 440;
-    let currentRoot = base;
-    const progression = [];
+function parseChordProgression(raw) {
+  const tokens = raw.trim().split(/\s+/);
+  const base = parseFloat(document.getElementById('baseFreqInput').value) || 440;
+  let currentRoot = base;
+  const progression = [];
 
-    tokens.forEach(tok => {
-        let m;
-        if (tok.startsWith('!')) {
-            currentRoot = base;
-            m = tok.match(/^!\[(.*)\]$/);
-        } else if ((m = tok.match(/^↑([\d\/]+)\[(.*)\]$/))) {
-            currentRoot *= parseRatio(m[1]);
-        } else if ((m = tok.match(/^↓([\d\/]+)\[(.*)\]$/))) {
-            currentRoot /= parseRatio(m[1]);
-        }
+  tokens.forEach(tok => {
+    let m;
 
-        if (m) {
-            const ratioPart = m[2] || m[1];
-            const intervals = getRatioArray(ratioPart);
-            const freqs = intervals.map(r => currentRoot * r);
-            progression.push(freqs);
-        }
-    });
-
-    return progression;
-}
-
-function playChordProgression(chordList) {
-    if (!chordList.length) return;
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    let t0 = ctx.currentTime;
-
-    chordList.forEach((freqs, i) => {
-        freqs.forEach(freq => {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.value = freq;
-            gain.gain.value = 0.25;
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            const start = t0 + i * 1.2;
-            osc.start(start);
-            osc.stop(start + 1);
-        });
-    });
-}
-document.getElementById('playChordProgression').addEventListener('click', () => {
-    const raw = document.getElementById('chordProgressionInput').value;
-    const st = document.getElementById('chordStatus');
-    const chords = parseChordProgression(raw);
-    if (!chords.length) {
-        st.textContent = '有効なコード進行がありません';
-        return;
+    if (tok === '!') {
+      currentRoot = base;
+      return;
     }
-    st.textContent = `コード進行再生中 (${chords.length} 和音)`;
-    playChordProgression(chords);
-});
+
+    if (m = tok.match(/^(↑|↓)(\d+(?:\/\d+)?)\[(.+)\]$/)) {
+      const dir = m[1] === '↑' ? 1 : -1;
+      const ratio = parseRatio(m[2]);
+      currentRoot = dir === 1 ? currentRoot * ratio : currentRoot / ratio;
+      const intervals = getRatioArray(m[3]);
+      progression.push({ root: currentRoot, intervals });
+      return;
+    }
+    if (m = tok.match(/^\[(.+)\]$/)) {
+      const intervals = getRatioArray(m[1]);
+      progression.push({ root: currentRoot, intervals });
+      return;
+    }
+  });
+
+  return progression;
+}
+
+function playChordProgression(chords) {
+  if (!chords.length) return;
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const duration = parseFloat(document.getElementById('chordDurationInput').value) || 1;
+  let t0 = ctx.currentTime;
+
+  chords.forEach(({ root, intervals }) => {
+    intervals.forEach(r => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = root * r;
+      gain.gain.value = 0.3;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + duration);
+    });
+    t0 += duration;
+  });
+}
+
+document.getElementById('playChords').addEventListener('click', () => {
+  const raw = document.getElementById('chordInput').value;
+  const st = document.getElementById('chordStatus');
+  const chords = parseChordProgression(raw);
+  if (!chords.length) {
+    st.textContent = '有効なコード進行がありません';
+    return;
+  }
+  st.textContent = `コード進行再生中 (${chords.length} 和音)`;
+  playChordProgression(chords);
 });
