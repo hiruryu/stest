@@ -3,28 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>🔬 スケール＆リズム研究用</title>
+  <title>🔬 研究用</title>
   <link rel="stylesheet" href="stylesheet.css">
 </head>
 <body>
   <div class="container">
-    <h1>🔬 スケール＆リズム研究用</h1>
+    <h1>🔬 研究用</h1>
 
     <h2>スケール</h2>
     <p>カンマ区切りで純正音程を入力し，<br>
       「 再生 」ボタンを押してください。</p>
-    <textarea id="ratioInput" rows="2"></textarea>
+    <textarea id="ratioInput" rows="2" placeholder="1, 9/8, 5/4, 4/3, 3/2"></textarea>
     <label for="baseFreqInput">主音 (Hz)</label>
     <input type="number" id="baseFreqInput" value="440">
     <button class="playResearch" id="playResearch">再生</button>
     <p id="status" class="placeholder">入力後に「 再生 」ボタンを押してください。</p>
-    
+
     <hr>
-   <hr>
-<h2>コード進行</h2>
-<p>例：<code>![1, 5/4, 3/2] - ↑3/2[1, 5/4, 3/2] - ↓3/2[1, 6/5, 9/5]</code></p>
-<textarea id="chordProgressionInput" rows="2"></textarea>
-<button class="playChordProgression" id="playChordProgression">再生</button>
+<h2>コード進行 <button class="usage-toggle" data-target="chordUsage">使い方</button></h2>
+<div id="chordUsage" class="usage">
+  <ul>
+    <li><code>!</code> は主音（Base）をルートに設定</li>
+    <li><code>↑ratio</code>、<code>↓ratio</code>：現在のルートを ratio 倍／逆 ratio 倍</li>
+    <li><code>[a,b,c]</code>：コード構成音（ratio の配列）</li>
+    <li>Each tokenはスペース区切り</li>
+  </ul>
+</div>
+<textarea id="chordInput" rows="2" placeholder="例: ! [1,5/4,3/2] ↑3/2 [1,5/4,3/2]"></textarea>
+<label for="chordDurationInput">各コードの長さ (秒)</label>
+<input type="number" id="chordDurationInput" value="1" step="0.1">
+<button class="playChords" id="playChords">再生</button>
 <p id="chordStatus" class="placeholder">入力後に「 再生 」ボタンを押してください。</p>
 
     <hr>
@@ -38,21 +46,25 @@
         <li>「 xN 」：まとめた拍価をN回繰り返す</li>
       </ul>
     </div>
-    <textarea id="rhythmInput" rows="2"></textarea>
-    <button class="playRhythm" id="playRhythm">再生</button>
-    <p id="rhythmStatus" class="placeholder">入力後に「 再生 」ボタンを押してください。</p>
-     <p>複数のリズムをセミコロンで区切って入力してください。</p>
-    <textarea id="polyrhythmInput" rows="2"></textarea>
+    <textarea id="rhythmInput" rows="2" placeholder="1, (1), =, [2/3, 1/3]x3"></textarea>
     <label for="beatDurationInput">1拍の長さ (ms)</label>
     <input type="number" id="beatDurationInput" value="500">
-     <button class="playPolyrhythm" id="playPolyrhythm">再生</button>
-     <p id="polyrhythmStatus" class="placeholder">入力後に「 再生 」ボタンを押してください。</p>
-   </div>
+    <button id="playRhythm">再生</button>
+    <p id="rhythmStatus" class="placeholder">入力後に「 再生 」ボタンを押してください。</p>
+
+    <hr>
+
+    <h2>ポリリズム</h2>
+    <p>複数のリズムをセミコロンで区切って入力してください。</p>
+    <textarea id="polyrhythmInput" rows="2" placeholder="1,1,1 ; 2/3,2/3,2/3"></textarea>
+    <button id="playPolyrhythm">再生</button>
+    <p id="polyrhythmStatus" class="placeholder">入力後に「 再生 」ボタンを押してください。</p>
+  </div>
   <script src="main.js"></script>
   <br>
   <br>
   <div class="x">
-    <a href="https://www.x.com/Hiruryu01">@Hiruryu01</a>
+    <a href="https://www.youtube.com/@Hiruryu01">@Hiruryu01</a>
   </div>
 </body>
 </html>
